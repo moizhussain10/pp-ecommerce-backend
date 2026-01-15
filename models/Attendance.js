@@ -5,6 +5,7 @@ const attendanceSchema = new mongoose.Schema({
   userId: { type: String, required: true, index: true },
   checkinTime: { type: Date, required: true },
   checkoutTime: { type: Date, default: null },
+  email: { type: String, default: "no-email@provided.com" },
   status: {
     type: String,
     enum: ["CheckedIn", "CheckedOut", "Absent"],
