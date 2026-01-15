@@ -13,19 +13,33 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
-// === Middleware ===
 app.use(express.json());
+
+// CORS - Multiple methods
 app.use(cors({
-  origin: [
-    'https://pp-ecommerce-frontend.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000'
-  ],
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'https://pp-ecommerce-frontend.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Preflight requests ke liye
+app.options('*', cors());
 // === Database Connection ===
 mongoose
   .connect(MONGO_URI)
@@ -131,6 +145,35 @@ app.get('/api/mark-absent', async (req, res) => {
     }
     res.json(result);
 }); 
+
+app.get("/api/status/:userId", async (req, res) => {
+  const { userId } = req.params;
+  
+  console.log('Status check for userId:', userId); // Debug log
+  
+  try {
+    const activeCheckin = await Attendance.findOne({
+      userId,
+      status: "CheckedIn",
+    });
+
+    if (activeCheckin) {
+      return res.status(200).json({
+        isCheckedIn: true,
+        checkinTime: activeCheckin.checkinTime,
+        checkinId: activeCheckin.checkinId,
+      });
+    } else {
+      return res.status(200).json({ isCheckedIn: false });
+    }
+  } catch (error) {
+    console.error("Status check error:", error); // Better logging
+    res.status(500).json({ 
+      message: "Failed to get status", 
+      error: error.message // Error message frontend ko bhejo
+    });
+  }
+});
 
 // === API Endpoints ===
 
