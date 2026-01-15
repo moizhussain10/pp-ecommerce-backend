@@ -1,10 +1,9 @@
-// backend/server.js
+// backend/server.js - Minimal Test Version
 
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import Attendance from "./models/Attendance.js";
 
 dotenv.config();
 
@@ -22,13 +21,11 @@ app.use(cors({
       'http://localhost:5173',
       'http://localhost:3000'
     ];
-    
     if (!origin) return callback(null, true);
-    
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(null, true); // Temporarily allow all
+      callback(null, true);
     }
   },
   credentials: true,
@@ -38,28 +35,65 @@ app.use(cors({
 
 app.options('*', cors());
 
-// Root Route
+// Root Route (No DB, No Model)
 app.get("/", (req, res) => {
   res.json({ 
-    message: "PP Ecommerce Backend API is running! 🚀",
+    message: "Backend is alive! 🚀",
     status: "active",
-    endpoints: {
-      checkin: "/api/checkin",
-      checkout: "/api/checkout",
-      status: "/api/status/:userId",
-      history: "/api/history/:userId"
+    timestamp: new Date().toISOString(),
+    env: {
+      hasMongoUri: !!MONGO_URI,
+      nodeVersion: process.version
     }
   });
 });
 
-// Database Connection
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("MongoDB connected successfully"))
-  .catch((err) => {
-    console.error("MongoDB connection error:", err);
-    process.exit(1);
+// Test endpoint
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    message: "API working",
+    timestamp: new Date().toISOString()
   });
+});
+
+// Database Connection Helper
+let isConnected = false;
+let Attendance = null;
+
+const connectDB = async () => {
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  try {
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    
+    isConnected = true;
+    
+    // Define Attendance model inline
+    const attendanceSchema = new mongoose.Schema({
+      userId: { type: String, required: true },
+      checkinTime: { type: Date, required: true },
+      checkoutTime: { type: Date },
+      status: { type: String, required: true },
+      checkinId: { type: String, required: true, unique: true },
+      punctualityStatus: { type: String },
+      halfDayStatus: { type: String },
+      duration: { type: Number }
+    });
+    
+    // Check if model already exists
+    Attendance = mongoose.models.Attendance || mongoose.model("Attendance", attendanceSchema);
+    
+    console.log("MongoDB connected");
+  } catch (error) {
+    console.error("MongoDB error:", error.message);
+    throw error;
+  }
+};
 
 // Utility Function
 const calculateDuration = (checkinTime, checkoutTime) => {
@@ -70,23 +104,19 @@ const calculateDuration = (checkinTime, checkoutTime) => {
   return null;
 };
 
-// === API ENDPOINTS ===
-
 // 1. CHECK-IN Endpoint
 app.post("/api/checkin", async (req, res) => {
-  console.log("RECEIVED PAYLOAD:", req.body);
-
-  const { userId, timestamp, checkinId, punctualityStatus, halfDayStatus } = req.body;
-
-  if (!userId || !timestamp || !checkinId || !punctualityStatus || !halfDayStatus) {
-    console.error("Missing fields:", req.body);
-    return res.status(400).json({ 
-      message: "Missing required fields in checkin data." 
-    });
-  }
-
   try {
-    // Check if user already has an open checkin
+    await connectDB();
+    
+    const { userId, timestamp, checkinId, punctualityStatus, halfDayStatus } = req.body;
+
+    if (!userId || !timestamp || !checkinId || !punctualityStatus || !halfDayStatus) {
+      return res.status(400).json({ 
+        message: "Missing required fields" 
+      });
+    }
+
     const existingCheckin = await Attendance.findOne({
       userId,
       status: "CheckedIn"
@@ -94,7 +124,7 @@ app.post("/api/checkin", async (req, res) => {
 
     if (existingCheckin) {
       return res.status(409).json({ 
-        message: "User already has an active check-in session." 
+        message: "User already checked in" 
       });
     }
 
@@ -110,13 +140,13 @@ app.post("/api/checkin", async (req, res) => {
     await newCheckin.save();
     
     return res.status(201).json({
-      message: "Checkin recorded successfully.",
+      message: "Checkin successful",
       record: newCheckin
     });
   } catch (error) {
-    console.error("Checkin Error:", error);
+    console.error("Checkin error:", error.message);
     return res.status(500).json({ 
-      message: "Failed to record checkin",
+      message: "Checkin failed",
       error: error.message 
     });
   }
@@ -124,15 +154,17 @@ app.post("/api/checkin", async (req, res) => {
 
 // 2. CHECK-OUT Endpoint
 app.post("/api/checkout", async (req, res) => {
-  const { userId, timestamp, checkinId } = req.body;
-
-  if (!userId || !timestamp || !checkinId) {
-    return res.status(400).json({
-      message: "Missing required fields: userId, timestamp, checkinId"
-    });
-  }
-
   try {
+    await connectDB();
+    
+    const { userId, timestamp, checkinId } = req.body;
+
+    if (!userId || !timestamp || !checkinId) {
+      return res.status(400).json({
+        message: "Missing required fields"
+      });
+    }
+
     const record = await Attendance.findOne({
       userId,
       status: "CheckedIn",
@@ -141,7 +173,7 @@ app.post("/api/checkout", async (req, res) => {
 
     if (!record) {
       return res.status(404).json({
-        message: "No active checkin session found for this user/checkinId."
+        message: "No active checkin found"
       });
     }
 
@@ -155,13 +187,13 @@ app.post("/api/checkout", async (req, res) => {
     await record.save();
 
     res.status(200).json({ 
-      message: "Checkout recorded", 
+      message: "Checkout successful", 
       record: record 
     });
   } catch (error) {
-    console.error("Checkout Error:", error);
+    console.error("Checkout error:", error.message);
     res.status(500).json({ 
-      message: "Failed to record checkout",
+      message: "Checkout failed",
       error: error.message 
     });
   }
@@ -169,11 +201,11 @@ app.post("/api/checkout", async (req, res) => {
 
 // 3. Status Check Endpoint
 app.get("/api/status/:userId", async (req, res) => {
-  const { userId } = req.params;
-  
-  console.log('Status check for userId:', userId);
-  
   try {
+    await connectDB();
+    
+    const { userId } = req.params;
+    
     const activeCheckin = await Attendance.findOne({
       userId,
       status: "CheckedIn"
@@ -189,9 +221,9 @@ app.get("/api/status/:userId", async (req, res) => {
       return res.status(200).json({ isCheckedIn: false });
     }
   } catch (error) {
-    console.error("Status check error:", error);
+    console.error("Status error:", error.message);
     res.status(500).json({ 
-      message: "Failed to get status", 
+      message: "Status check failed", 
       error: error.message 
     });
   }
@@ -199,11 +231,11 @@ app.get("/api/status/:userId", async (req, res) => {
 
 // 4. GET HISTORY Endpoint
 app.get("/api/history/:userId", async (req, res) => {
-  const { userId } = req.params;
-  
-  console.log('History check for userId:', userId);
-  
   try {
+    await connectDB();
+    
+    const { userId } = req.params;
+    
     const historyRecords = await Attendance.find({
       userId,
       status: "CheckedOut"
@@ -221,18 +253,13 @@ app.get("/api/history/:userId", async (req, res) => {
 
     res.status(200).json(formattedHistory);
   } catch (error) {
-    console.error("History Fetch Error:", error);
+    console.error("History error:", error.message);
     res.status(500).json({ 
-      message: "Failed to fetch user history",
+      message: "History fetch failed",
       error: error.message 
     });
   }
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-// NOTE: Absentee check feature commented out 
-// Implement karne ke liye User model aur proper time range logic chahiye
+// Export for Vercel (MUST be default export)
+export default app;
