@@ -1,81 +1,68 @@
-import express from "express";
-import cors from "cors";
-import mongoose from "mongoose";
-import dotenv from "dotenv";
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import dotenv from 'dotenv';
 
 dotenv.config();
 const app = express();
 
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-// 1. MongoDB Connection
-const mongoURI = process.env.MONGO_URI; 
-mongoose.connect(mongoURI)
-  .then(() => console.log("MongoDB Connected... ✅"))
-  .catch(err => console.log("MongoDB Connection Error: ❌", err));
+// Database connection ko function mein rakhein
+const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) return;
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log("MongoDB Connected");
+  } catch (err) {
+    console.error("MongoDB Connection Error:", err);
+    throw err; // Ye throw karna zaroori hai taake 500 error ka pata chale
+  }
+};
 
-// 2. Updated Schema (Email field ke sath)
+// 2. Schema aur Model (Ensure model isn't re-compiled)
 const AttendanceSchema = new mongoose.Schema({
   userId: { type: String, required: true },
-  email: { type: String, required: true }, // Admin ke liye email save hogi
+  email: { type: String, required: true },
   status: String,
-  checkinTime: { type: Date, default: null },
-  checkoutTime: { type: Date, default: null },
-  punctualityStatus: { type: String, default: "---" },
-  halfDayStatus: { type: String, default: "FullDay" }
+  checkinTime: { type: Date, default: Date.now },
 }, { timestamps: true });
 
-const Attendance = mongoose.model("Attendance", AttendanceSchema, "attendances");
+const Attendance = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
 
-// 3. GET: Real Data from MongoDB (No Mocking)
-app.get('/api/admin/attendance', async (req, res) => {
+// --- ROUTES ---
+
+app.get('/status/:userId', async (req, res) => {
   try {
-    const records = await Attendance.find().sort({ createdAt: -1 });
-    res.json(records);
+    await connectDB(); // Har request par check karein
+    const record = await Attendance.findOne({ userId: req.params.userId }).sort({ createdAt: -1 });
+    // Dashboard ko 'isCheckedIn' property chahiye hoti hai
+    if (!record) return res.json({ isCheckedIn: false }); 
+    res.json({ ...record._doc, isCheckedIn: record.status === "CheckedIn" });
   } catch (err) {
-    res.status(500).json({ error: "DB Fetch Error", details: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 4. POST: Check-in logic with Email
-app.post("/api/checkin", async (req, res) => {
+app.get('/history/:userId', async (req, res) => {
   try {
-    const { userId, email, status, punctualityStatus, halfDayStatus } = req.body;
-
-    const newAttendance = new Attendance({
-      userId,
-      email, // Frontend se user ki email aayegi
-      status: status || "CheckedIn",
-      checkinTime: new Date(),
-      punctualityStatus: punctualityStatus || "Not Late",
-      halfDayStatus: halfDayStatus || "FullDay"
-    });
-
-    const savedRecord = await newAttendance.save();
-    res.status(201).json({ message: "Check-in successful", data: savedRecord });
+    await connectDB();
+    const history = await Attendance.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+    res.json(history);
   } catch (err) {
-    res.status(500).json({ error: "Check-in failed", details: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 5. POST: Check-out logic
-app.post("/api/checkout", async (req, res) => {
+app.post('/checkin', async (req, res) => {
   try {
-    const { userId } = req.body;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const record = await Attendance.findOneAndUpdate(
-      { userId, checkinTime: { $gte: today }, checkoutTime: null },
-      { checkoutTime: new Date(), status: "CheckedOut" },
-      { new: true }
-    );
-
-    if (!record) return res.status(404).json({ message: "No active check-in found for today" });
-    res.json({ message: "Checked out successfully", data: record });
+    await connectDB();
+    const newRecord = new Attendance(req.body);
+    await newRecord.save();
+    res.status(201).json(newRecord);
   } catch (err) {
-    res.status(500).json({ error: "Checkout failed" });
+    res.status(500).json({ error: err.message });
   }
 });
 
