@@ -114,7 +114,7 @@ const runMarkAbsenteesCheck = async () => {
 
 // --- EXPRESS ROUTE TO TRIGGER ABSENTEE CHECK (No change) ---
 
-app.get('/https://pp-ecommerce-frontend.vercel.app/mark-absent', async (req, res) => {
+app.get('/api/mark-absent', async (req, res) => {
     const result = await runMarkAbsenteesCheck();
     
     if (result.error) {
@@ -127,7 +127,7 @@ app.get('/https://pp-ecommerce-frontend.vercel.app/mark-absent', async (req, res
 
 // 1. CHECK-IN Endpoint
 // ... (Check-in logic same rahega) ...
-app.post("/https://pp-ecommerce-frontend.vercel.app/checkin", async (req, res) => {
+app.post("/api/checkin", async (req, res) => {
   // 🔴 Yeh line yahan daal kar check karein
   console.log("RECEIVED PAYLOAD:", req.body);
 
@@ -170,7 +170,7 @@ app.post("/https://pp-ecommerce-frontend.vercel.app/checkin", async (req, res) =
 });
 
 // 2. CHECK-OUT Endpoint
-app.post("/https://pp-ecommerce-frontend.vercel.app/checkout", async (req, res) => {
+app.post("/api/checkout", async (req, res) => {
   const { userId, timestamp, checkinId } = req.body;
 
   if (!userId || !timestamp || !checkinId) {
@@ -218,7 +218,7 @@ app.post("/https://pp-ecommerce-frontend.vercel.app/checkout", async (req, res) 
 
 // 3. Status check endpoint (GET /api/status/:userId)
 // ... (Status check logic same rahega) ...
-app.get("/https://pp-ecommerce-frontend.vercel.app/status/:userId", async (req, res) => {
+app.get("/api/status/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
     const activeCheckin = await Attendance.findOne({
@@ -241,7 +241,7 @@ app.get("/https://pp-ecommerce-frontend.vercel.app/status/:userId", async (req, 
 });
 
 // 4. GET HISTORY Endpoint (NEW)
-app.get("/https://pp-ecommerce-frontend.vercel.app/history/:userId", async (req, res) => {
+app.get("/api/history/:userId", async (req, res) => {
   const { userId } = req.params;
   try {
     // Sirf woh records fetch karo jinka status 'CheckedOut' hai
