@@ -59,17 +59,28 @@ app.get("/api/status/:userId", async (req, res) => {
 
 app.get("/api/admin/attendance", async (req, res) => {
   try {
-    await connectDB(); // Database connection ensure karein
+    await connectDB();
     
-    // Saara data nikalna (Latest records pehle)
-    const allAttendance = await Attendance.find({})
-      .sort({ checkinTime: -1 })
-      .limit(100); // Performance ke liye limit lagai hai, aap hata bhi sakte hain
+    // Grouping logic: Har user ka sirf latest record uthao
+    const latestAttendance = await Attendance.aggregate([
+      { $sort: { checkinTime: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          email: { $first: "$email" },
+          status: { $first: "$status" },
+          checkinTime: { $first: "$checkinTime" },
+          checkoutTime: { $first: "$checkoutTime" },
+          punctualityStatus: { $first: "$punctualityStatus" },
+          userId: { $first: "$userId" }
+        }
+      },
+      { $sort: { status: 1 } } // Online (CheckedIn) wale upar ayenge
+    ]);
       
-    res.json(allAttendance);
+    res.json(latestAttendance);
   } catch (error) {
-    console.error("Admin Fetch Error:", error);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
