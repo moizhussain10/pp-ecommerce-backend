@@ -85,6 +85,18 @@ app.get("/api/admin/attendance", async (req, res) => {
 });
 
 
+app.get("/api/admin/user-details/:email", async (req, res) => {
+  try {
+    await connectDB();
+    const history = await Attendance.find({ email: req.params.email })
+      .sort({ checkinTime: -1 }); // Naya data pehle
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 app.post("/api/checkin", async (req, res) => {
   try {
     await connectDB();
