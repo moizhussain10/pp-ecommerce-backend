@@ -4,48 +4,40 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
-
 const app = express();
 
-// Database Connection Helper (Serverless Friendly)
+// Database Connection Helper
 let cachedDb = null;
-
 const connectDB = async () => {
   if (cachedDb && mongoose.connection.readyState === 1) return cachedDb;
-
-  // IMPORTANT: Make sure your Vercel Env Variable is named exactly MONGO_URI
   const uri = process.env.MONGO_URI;
-  if (!uri) throw new Error("MONGO_URI is not defined in environment variables");
-
+  if (!uri) throw new Error("MONGO_URI is missing in Vercel Settings!");
   try {
-    const db = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-    });
+    const db = await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
     cachedDb = db;
-    console.log("MongoDB Connected");
     return db;
   } catch (error) {
-    console.error("MongoDB connection error:", error.message);
+    console.error("DB Error:", error.message);
     throw error;
   }
 };
 
-// --- Model Definition ---
+// Schema & Model
 const attendanceSchema = new mongoose.Schema({
   userId: { type: String, required: true },
+  email: { type: String, default: "no-email@provided.com" },
   checkinTime: { type: Date, required: true },
-  checkoutTime: { type: Date },
+  checkoutTime: { type: Date, default: null },
   status: { type: String, required: true },
   checkinId: { type: String, required: true, unique: true },
-  punctualityStatus: { type: String },
-  halfDayStatus: { type: String },
-  duration: { type: Number }
+  punctualityStatus: { type: String, default: "N/A" },
+  halfDayStatus: { type: String, default: "FullDay" },
+  duration: { type: Number, default: null }
 });
 
-// Avoid "OverwriteModelError" in Vercel
 const Attendance = mongoose.models.Attendance || mongoose.model("Attendance", attendanceSchema);
 
-// --- Middleware ---
+// Middleware
 app.use(express.json());
 app.use(cors({
   origin: ["https://pp-ecommerce-frontend.vercel.app", "http://localhost:5173"],
@@ -53,60 +45,60 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
-// --- Routes ---
+// --- API ROUTES ---
 
-// Status Check Route
 app.get("/api/status/:userId", async (req, res) => {
   try {
     await connectDB();
-    const { userId } = req.params;
-    const activeCheckin = await Attendance.findOne({ userId, status: "CheckedIn" });
-
-    if (activeCheckin) {
-      return res.status(200).json({
-        isCheckedIn: true,
-        checkinTime: activeCheckin.checkinTime,
-        checkinId: activeCheckin.checkinId
-      });
-    }
-    res.status(200).json({ isCheckedIn: false });
+    const active = await Attendance.findOne({ userId: req.params.userId, status: "CheckedIn" });
+    res.json(active ? { isCheckedIn: true, checkinTime: active.checkinTime, checkinId: active.checkinId } : { isCheckedIn: false });
   } catch (error) {
-    res.status(500).json({ message: "Status check failed", error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// History Route
-app.get("/api/history/:userId", async (req, res) => {
-  try {
-    await connectDB();
-    const history = await Attendance.find({ userId: req.params.userId, status: "CheckedOut" })
-      .sort({ checkinTime: -1 }).limit(30);
-    res.status(200).json(history);
-  } catch (error) {
-    res.status(500).json({ message: "History failed", error: error.message });
-  }
-});
-
-// Check-in Route
 app.post("/api/checkin", async (req, res) => {
   try {
     await connectDB();
-    const { userId, timestamp, checkinId, punctualityStatus, halfDayStatus } = req.body;
-    
-    const existing = await Attendance.findOne({ userId, status: "CheckedIn" });
+    const existing = await Attendance.findOne({ userId: req.body.userId, status: "CheckedIn" });
     if (existing) return res.status(409).json({ message: "Already checked in" });
 
     const newRecord = new Attendance({
-      userId, checkinTime: new Date(timestamp), status: "CheckedIn", checkinId, punctualityStatus, halfDayStatus
+      ...req.body,
+      checkinTime: new Date(req.body.timestamp)
     });
     await newRecord.save();
     res.status(201).json(newRecord);
   } catch (error) {
-    res.status(500).json({ message: "Checkin failed", error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Root Route
-app.get("/", (req, res) => res.json({ status: "Backend Running" }));
+app.post("/api/checkout", async (req, res) => {
+  try {
+    await connectDB();
+    const record = await Attendance.findOne({ userId: req.body.userId, checkinId: req.body.checkinId, status: "CheckedIn" });
+    if (!record) return res.status(404).json({ message: "No active session found" });
+
+    const checkoutTime = new Date(req.body.timestamp);
+    record.checkoutTime = checkoutTime;
+    record.status = "CheckedOut";
+    record.duration = checkoutTime.getTime() - record.checkinTime.getTime();
+    await record.save();
+    res.json({ message: "Checked out!", record });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/history/:userId", async (req, res) => {
+  try {
+    await connectDB();
+    const history = await Attendance.find({ userId: req.params.userId }).sort({ checkinTime: -1 }).limit(30);
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 export default app;
