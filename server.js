@@ -49,17 +49,28 @@ app.use(cors({
 
 app.get("/api/status/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    // Database mein wahi record dhoondo jo CheckedIn ho AUR is userId ka ho
-    const status = await Attendance.findOne({ userId, status: "CheckedIn" });
-    
-    if (status) {
-      res.json({ isCheckedIn: true, ...status._doc });
+    await connectDB();
+    const { userId } = req.params; // Frontend se aane wali ID
+
+    // Check karein ke kya is user ka koi active 'CheckedIn' record hai
+    const activeStatus = await Attendance.findOne({ 
+      userId: userId, 
+      status: "CheckedIn" 
+    });
+
+    if (activeStatus) {
+      res.json({ 
+        isCheckedIn: true, 
+        checkinTime: activeStatus.checkinTime,
+        checkinId: activeStatus.checkinId,
+        punctualityStatus: activeStatus.punctualityStatus
+      });
     } else {
       res.json({ isCheckedIn: false });
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Status Route Error:", error);
+    res.status(500).json({ error: "Server Error", details: error.message });
   }
 });
 
@@ -139,11 +150,16 @@ app.post("/api/checkout", async (req, res) => {
 
 app.get("/api/history/:userId", async (req, res) => {
   try {
+    await connectDB();
     const { userId } = req.params;
-    const history = await Attendance.find({ userId }).sort({ checkinTime: -1 });
+
+    const history = await Attendance.find({ userId: userId })
+      .sort({ checkinTime: -1 });
+
     res.json(history);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("History Route Error:", error);
+    res.status(500).json({ error: "Server Error", details: error.message });
   }
 });
 
