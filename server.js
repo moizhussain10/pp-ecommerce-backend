@@ -57,6 +57,23 @@ app.get("/api/status/:userId", async (req, res) => {
   }
 });
 
+app.get("/api/admin/attendance", async (req, res) => {
+  try {
+    await connectDB(); // Database connection ensure karein
+    
+    // Saara data nikalna (Latest records pehle)
+    const allAttendance = await Attendance.find({})
+      .sort({ checkinTime: -1 })
+      .limit(100); // Performance ke liye limit lagai hai, aap hata bhi sakte hain
+      
+    res.json(allAttendance);
+  } catch (error) {
+    console.error("Admin Fetch Error:", error);
+    res.status(500).json({ error: "Internal Server Error", details: error.message });
+  }
+});
+
+
 app.post("/api/checkin", async (req, res) => {
   try {
     await connectDB();
