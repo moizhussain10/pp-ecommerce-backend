@@ -49,9 +49,15 @@ app.use(cors({
 
 app.get("/api/status/:userId", async (req, res) => {
   try {
-    await connectDB();
-    const active = await Attendance.findOne({ userId: req.params.userId, status: "CheckedIn" });
-    res.json(active ? { isCheckedIn: true, checkinTime: active.checkinTime, checkinId: active.checkinId } : { isCheckedIn: false });
+    const { userId } = req.params;
+    // Database mein wahi record dhoondo jo CheckedIn ho AUR is userId ka ho
+    const status = await Attendance.findOne({ userId, status: "CheckedIn" });
+    
+    if (status) {
+      res.json({ isCheckedIn: true, ...status._doc });
+    } else {
+      res.json({ isCheckedIn: false });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -133,8 +139,8 @@ app.post("/api/checkout", async (req, res) => {
 
 app.get("/api/history/:userId", async (req, res) => {
   try {
-    await connectDB();
-    const history = await Attendance.find({ userId: req.params.userId }).sort({ checkinTime: -1 }).limit(30);
+    const { userId } = req.params;
+    const history = await Attendance.find({ userId }).sort({ checkinTime: -1 });
     res.json(history);
   } catch (error) {
     res.status(500).json({ error: error.message });
