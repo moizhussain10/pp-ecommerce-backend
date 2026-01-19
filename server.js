@@ -109,10 +109,11 @@ app.put("/api/admin/update-attendance/:id", async (req, res) => {
     const { id } = req.params;
     const { checkinTime, checkoutTime, punctualityStatus } = req.body;
 
+    // String ko wapas proper Date object mein badlein
     const cIn = new Date(checkinTime);
     const cOut = checkoutTime ? new Date(checkoutTime) : null;
     
-    // Duration calculate karein agar checkoutTime maujood hai
+    // Duration recalculate karein (Milliseconds mein)
     let newDuration = null;
     if (cOut) {
       newDuration = cOut.getTime() - cIn.getTime();
@@ -129,8 +130,9 @@ app.put("/api/admin/update-attendance/:id", async (req, res) => {
       { new: true }
     );
 
-    res.json({ message: "Updated", updated });
+    res.json({ message: "Updated Successfully", updated });
   } catch (error) {
+    console.error("Update Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
