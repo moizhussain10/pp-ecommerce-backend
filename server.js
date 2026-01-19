@@ -119,13 +119,12 @@ app.post("/api/checkin", async (req, res) => {
     await connectDB();
     const { userId, email, checkinTime, status, punctualityStatus, checkinId } = req.body;
 
-    // 1. Aaj ki Date Range (Safe Way)
+    // 1. Aaj ki Date Range nikalne ka sahi tareeka (Avoid mutation)
     const now = new Date();
-    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-    // 2. Check for existing record
-    // Note: Ensure 'userId' is spelled exactly like this in your MongoDB Compass
+    // 2. Pehle check karein ke aaj ka koi record hai ya nahi
     const existingRecord = await Attendance.findOne({
       userId: userId,
       checkinTime: { 
@@ -140,13 +139,20 @@ app.post("/api/checkin", async (req, res) => {
       });
     }
 
-    // 3. New Entry
+    // 3. Unique ID Check (Double Security)
+    // Agar server restart hua ya slow internet se 2 bar click hua toh ye bachayega
+    const duplicateId = await Attendance.findOne({ checkinId });
+    if (duplicateId) {
+       return res.status(400).json({ message: "Duplicate Checkin ID detected!" });
+    }
+
+    // 4. New Entry
     const newEntry = new Attendance({
       userId,
-      email,
+      email: email || "no-email@provided.com", // Fallback agar email miss ho jaye
       checkinTime: new Date(checkinTime), 
-      status,
-      punctualityStatus,
+      status: "CheckedIn",
+      punctualityStatus: punctualityStatus || "N/A",
       checkinId
     });
 
@@ -154,8 +160,11 @@ app.post("/api/checkin", async (req, res) => {
     res.status(200).json({ message: "Check-in Successful" });
 
   } catch (error) {
-    // Ye console log Vercel ke dashboard mein nazar aayega
     console.error("ERROR DETAILS:", error);
+    // Agar MongoDB unique key error (11000) hai toh specifically batao
+    if (error.code === 11000) {
+      return res.status(400).json({ error: "Conflict", message: "Ye checkin ID pehle se istemal ho chuki hai." });
+    }
     res.status(500).json({ error: "Internal Server Error", message: error.message });
   }
 });
