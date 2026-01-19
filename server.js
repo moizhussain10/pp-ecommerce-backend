@@ -119,14 +119,13 @@ app.post("/api/checkin", async (req, res) => {
     await connectDB();
     const { userId, email, checkinTime, status, punctualityStatus, checkinId } = req.body;
 
-    // 1. Aaj ki date ki range set karein (Server Timezone ke mutabiq)
-    const today = new Date();
-    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+    // 1. Aaj ki Date Range (Safe Way)
+    const now = new Date();
+    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(now.setHours(23, 59, 59, 999));
 
-    console.log(`Checking for existing record: User ${userId} between ${startOfDay} and ${endOfDay}`);
-
-    // 2. Database mein dhoondo agar is user ne aaj check-in kiya hai
+    // 2. Check for existing record
+    // Note: Ensure 'userId' is spelled exactly like this in your MongoDB Compass
     const existingRecord = await Attendance.findOne({
       userId: userId,
       checkinTime: { 
@@ -136,29 +135,28 @@ app.post("/api/checkin", async (req, res) => {
     });
 
     if (existingRecord) {
-      console.log("Duplicate entry blocked for user:", userId);
       return res.status(400).json({ 
         message: "Aap aaj ka check-in pehle hi kar chuke hain." 
       });
     }
 
-    // 3. Naya record save karein
+    // 3. New Entry
     const newEntry = new Attendance({
       userId,
       email,
-      checkinTime: new Date(checkinTime), // Ensure it's a Date object
+      checkinTime: new Date(checkinTime), 
       status,
       punctualityStatus,
       checkinId
     });
 
     await newEntry.save();
-    console.log("Check-in successful for:", email);
     res.status(200).json({ message: "Check-in Successful" });
 
   } catch (error) {
-    console.error("CRITICAL ERROR IN CHECKIN:", error.message);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
+    // Ye console log Vercel ke dashboard mein nazar aayega
+    console.error("ERROR DETAILS:", error);
+    res.status(500).json({ error: "Internal Server Error", message: error.message });
   }
 });
 
