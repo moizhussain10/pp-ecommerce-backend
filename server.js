@@ -153,7 +153,7 @@ app.get("/api/admin/user-details/:email", async (req, res) => {
 app.post("/api/checkin", async (req, res) => {
   try {
     await connectDB();
-    const { userId, email, checkinTime, status, punctualityStatus, checkinId } = req.body;
+    const { userId, email, checkinTime, status, punctualityStatus, checkinId , halfDayStatus} = req.body;
 
     // 1. Aaj ki Date Range nikalne ka sahi tareeka (Avoid mutation)
     const now = new Date();
@@ -189,7 +189,8 @@ app.post("/api/checkin", async (req, res) => {
       checkinTime: new Date(checkinTime), 
       status: "CheckedIn",
       punctualityStatus: punctualityStatus || "N/A",
-      checkinId
+      checkinId,
+      halfDayStatus: halfDayStatus
     });
 
     await newEntry.save();
