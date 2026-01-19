@@ -109,19 +109,27 @@ app.put("/api/admin/update-attendance/:id", async (req, res) => {
     const { id } = req.params;
     const { checkinTime, checkoutTime, punctualityStatus } = req.body;
 
-    const updatedRecord = await Attendance.findByIdAndUpdate(
+    const cIn = new Date(checkinTime);
+    const cOut = checkoutTime ? new Date(checkoutTime) : null;
+    
+    // Duration calculate karein agar checkoutTime maujood hai
+    let newDuration = null;
+    if (cOut) {
+      newDuration = cOut.getTime() - cIn.getTime();
+    }
+
+    const updated = await Attendance.findByIdAndUpdate(
       id,
       { 
-        checkinTime: new Date(checkinTime), 
-        checkoutTime: checkoutTime ? new Date(checkoutTime) : null,
-        punctualityStatus: punctualityStatus 
+        checkinTime: cIn, 
+        checkoutTime: cOut, 
+        punctualityStatus,
+        duration: newDuration 
       },
-      { new: true } // Taake updated data wapas mile
+      { new: true }
     );
 
-    if (!updatedRecord) return res.status(404).json({ message: "Record not found" });
-
-    res.json({ message: "Attendance updated successfully!", updatedRecord });
+    res.json({ message: "Updated", updated });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
