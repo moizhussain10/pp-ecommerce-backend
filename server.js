@@ -119,34 +119,46 @@ app.post("/api/checkin", async (req, res) => {
     await connectDB();
     const { userId, email, checkinTime, status, punctualityStatus, checkinId } = req.body;
 
-    // --- Naya Logic: Aaj ki date check karo ---
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0); // Aaj ki raat 12 baje ka time
+    // 1. Aaj ki date ki range set karein (Server Timezone ke mutabiq)
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999); // Aaj ki raat 11:59 ka time
+    console.log(`Checking for existing record: User ${userId} between ${startOfDay} and ${endOfDay}`);
 
-    // Database mein dhoondo ke kya is user ne aaj pehle check-in kiya hai?
+    // 2. Database mein dhoondo agar is user ne aaj check-in kiya hai
     const existingRecord = await Attendance.findOne({
       userId: userId,
-      checkinTime: { $gte: startOfDay, $lte: endOfDay }
+      checkinTime: { 
+        $gte: startOfDay, 
+        $lte: endOfDay 
+      }
     });
 
     if (existingRecord) {
+      console.log("Duplicate entry blocked for user:", userId);
       return res.status(400).json({ 
-        message: "Aap aaj ka check-in pehle hi kar chuke hain. Ek din mein sirf ek baar ijazat hai." 
+        message: "Aap aaj ka check-in pehle hi kar chuke hain." 
       });
     }
 
-    // Agar record nahi mila, toh check-in hone do
-    const newAttendance = new Attendance({
-      userId, email, checkinTime, status, punctualityStatus, checkinId
+    // 3. Naya record save karein
+    const newEntry = new Attendance({
+      userId,
+      email,
+      checkinTime: new Date(checkinTime), // Ensure it's a Date object
+      status,
+      punctualityStatus,
+      checkinId
     });
 
-    await newAttendance.save();
+    await newEntry.save();
+    console.log("Check-in successful for:", email);
     res.status(200).json({ message: "Check-in Successful" });
+
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("CRITICAL ERROR IN CHECKIN:", error.message);
+    res.status(500).json({ error: "Internal Server Error", details: error.message });
   }
 });
 
