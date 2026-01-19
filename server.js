@@ -102,6 +102,32 @@ app.get("/api/admin/attendance", async (req, res) => {
 });
 
 
+// Admin update route
+app.put("/api/admin/update-attendance/:id", async (req, res) => {
+  try {
+    await connectDB();
+    const { id } = req.params;
+    const { checkinTime, checkoutTime, punctualityStatus } = req.body;
+
+    const updatedRecord = await Attendance.findByIdAndUpdate(
+      id,
+      { 
+        checkinTime: new Date(checkinTime), 
+        checkoutTime: checkoutTime ? new Date(checkoutTime) : null,
+        punctualityStatus: punctualityStatus 
+      },
+      { new: true } // Taake updated data wapas mile
+    );
+
+    if (!updatedRecord) return res.status(404).json({ message: "Record not found" });
+
+    res.json({ message: "Attendance updated successfully!", updatedRecord });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 app.get("/api/admin/user-details/:email", async (req, res) => {
   try {
     await connectDB();
