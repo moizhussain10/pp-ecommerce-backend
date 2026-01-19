@@ -107,7 +107,7 @@ app.put("/api/admin/update-attendance/:id", async (req, res) => {
   try {
     await connectDB();
     const { id } = req.params;
-    const { checkinTime, checkoutTime, punctualityStatus } = req.body;
+    const { checkinTime, checkoutTime, punctualityStatus , halfDayStatus} = req.body;
 
     // String ko wapas proper Date object mein badlein
     const cIn = new Date(checkinTime);
