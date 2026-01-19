@@ -117,15 +117,34 @@ app.get("/api/admin/user-details/:email", async (req, res) => {
 app.post("/api/checkin", async (req, res) => {
   try {
     await connectDB();
-    const existing = await Attendance.findOne({ userId: req.body.userId, status: "CheckedIn" });
-    if (existing) return res.status(409).json({ message: "Already checked in" });
+    const { userId, email, checkinTime, status, punctualityStatus, checkinId } = req.body;
 
-    const newRecord = new Attendance({
-      ...req.body,
-      checkinTime: new Date(req.body.timestamp)
+    // --- Naya Logic: Aaj ki date check karo ---
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0); // Aaj ki raat 12 baje ka time
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999); // Aaj ki raat 11:59 ka time
+
+    // Database mein dhoondo ke kya is user ne aaj pehle check-in kiya hai?
+    const existingRecord = await Attendance.findOne({
+      userId: userId,
+      checkinTime: { $gte: startOfDay, $lte: endOfDay }
     });
-    await newRecord.save();
-    res.status(201).json(newRecord);
+
+    if (existingRecord) {
+      return res.status(400).json({ 
+        message: "Aap aaj ka check-in pehle hi kar chuke hain. Ek din mein sirf ek baar ijazat hai." 
+      });
+    }
+
+    // Agar record nahi mila, toh check-in hone do
+    const newAttendance = new Attendance({
+      userId, email, checkinTime, status, punctualityStatus, checkinId
+    });
+
+    await newAttendance.save();
+    res.status(200).json({ message: "Check-in Successful" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
